@@ -6,7 +6,10 @@ import VentControl from './components/VentControl';
 import VentMarker from './components/VentMarker';
 
 function App() {
-  const [devices, setDevices] = useState({});
+  const [devices, setDevices] = useState({
+    vents: {},
+    sensors: {}
+  });
   const [floorPlan, setFloorPlan] = useState(null);
   const [vents, setVents] = useState([]);
   const [draggingDevice, setDraggingDevice] = useState(null);
@@ -24,25 +27,66 @@ function App() {
       
       switch(data.type) {
         case 'register':
-          setDevices(prev => ({
-            ...prev,
-            [data.deviceId]: {
-              deviceId: data.deviceId,
-              angle: data.currentAngle,
-              assigned: false,
-              alias: '',
-              color: '#3b82f6',
-              floor: '1',
-              minAngle: 0,
-              maxAngle: 90
-            }
-          }));
+          if (data.deviceType === 'vent') {
+            setDevices(prev => ({
+              ...prev,
+              vents: {
+                ...prev.vents,
+                [data.deviceId]: {
+                  deviceId: data.deviceId,
+                  deviceType: 'vent',
+                  angle: data.currentAngle,
+                  assigned: false,
+                  alias: '',
+                  color: '#3b82f6',
+                  floor: '1',
+                  minAngle: data.config.minAngle,
+                  maxAngle: data.config.maxAngle
+                }
+              }
+            }));
+          } else if (data.deviceType === 'sensor') {
+            setDevices(prev => ({
+              ...prev,
+              sensors: {
+                ...prev.sensors,
+                [data.deviceId]: {
+                  deviceId: data.deviceId,
+                  deviceType: 'sensor',
+                  temperature: data.currentTemp,
+                  assigned: false,
+                  alias: '',
+                  color: '#10b981',
+                  floor: '1'
+                }
+              }
+            }));
+          }
           break;
           
         case 'angleSet':
           setDevices(prev => ({
             ...prev,
-            [data.deviceId]: { ...prev[data.deviceId], angle: data.angle }
+            vents: {
+              ...prev.vents,
+              [data.deviceId]: { 
+                ...prev.vents[data.deviceId], 
+                angle: data.angle 
+              }
+            }
+          }));
+          break;
+
+        case 'tempUpdate':
+          setDevices(prev => ({
+            ...prev,
+            sensors: {
+              ...prev.sensors,
+              [data.deviceId]: { 
+                ...prev.sensors[data.deviceId], 
+                temperature: data.temperature 
+              }
+            }
           }));
           break;
       }
