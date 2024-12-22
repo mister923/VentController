@@ -1,11 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Stage, Layer, Image, Circle } from 'react-konva';
+import DeviceConfig from './components/DeviceConfig';
+import DeviceList from './components/DeviceList';
+import VentControl from './components/VentControl';
+import VentMarker from './components/VentMarker';
 
 function App() {
   const [devices, setDevices] = useState({});
   const [floorPlan, setFloorPlan] = useState(null);
   const [vents, setVents] = useState([]);
+  const [draggingDevice, setDraggingDevice] = useState(null);
+  const [selectedDevice, setSelectedDevice] = useState(null);
+  const [showDeviceConfig, setShowDeviceConfig] = useState(false);
   const wsRef = useRef(null);
+  const [placingDevice, setPlacingDevice] = useState(null);
 
   useEffect(() => {
     // Initialize WebSocket connection
@@ -18,7 +26,16 @@ function App() {
         case 'register':
           setDevices(prev => ({
             ...prev,
-            [data.deviceId]: { angle: data.currentAngle }
+            [data.deviceId]: {
+              deviceId: data.deviceId,
+              angle: data.currentAngle,
+              assigned: false,
+              alias: '',
+              color: '#3b82f6',
+              floor: '1',
+              minAngle: 0,
+              maxAngle: 90
+            }
           }));
           break;
           
@@ -47,25 +64,106 @@ function App() {
     img.src = URL.createObjectURL(file);
   };
 
+  const handleDragStart = (deviceId) => {
+    setDraggingDevice(deviceId);
+  };
+
   const handleStageClick = (e) => {
-    const pos = e.target.getStage().getPointerPosition();
-    const deviceId = document.getElementById('deviceSelect').value;
+    if (!placingDevice) return;
     
-    if (deviceId) {
-      setVents(prev => [...prev, {
-        x: pos.x,
-        y: pos.y,
-        deviceId
-      }]);
-    }
+    const pos = e.target.getStage().getPointerPosition();
+    setVents(prev => [...prev, {
+      x: pos.x,
+      y: pos.y,
+      deviceId: placingDevice
+    }]);
+    
+    // Mark device as assigned
+    setDevices(prev => ({
+      ...prev,
+      [placingDevice]: {
+        ...prev[placingDevice],
+        assigned: true
+      }
+    }));
+    
+    setPlacingDevice(null);
+  };
+
+  const handleVentClick = (device) => {
+    setSelectedDevice(device);
+  };
+
+  const handleAllVents = (angle) => {
+    Object.keys(devices).forEach(deviceId => {
+      setVentAngle(deviceId, angle);
+    });
+  };
+
+  const handleConfigureDevice = (device) => {
+    setSelectedDevice(device);
+    setShowDeviceConfig(true);
+  };
+
+  const handleDeviceConfig = (config) => {
+    setDevices(prev => ({
+      ...prev,
+      [config.deviceId]: {
+        ...prev[config.deviceId],
+        alias: config.alias,
+        color: config.color,
+        floor: config.floor,
+        minAngle: config.minAngle,
+        maxAngle: config.maxAngle
+      }
+    }));
+    setShowDeviceConfig(false);
+    setSelectedDevice(null);
   };
 
   const setVentAngle = (deviceId, angle) => {
-    wsRef.current.send(JSON.stringify({
-      type: 'setAngle',
-      deviceId,
-      angle
+    const device = devices[deviceId];
+    if (!device) return;
+
+    // Validate angle is within device's range
+    const minAngle = device.minAngle || 0;
+    const maxAngle = device.maxAngle || 90;
+    
+    if (angle >= minAngle && angle <= maxAngle) {
+      // Update local state
+      setDevices(prev => ({
+        ...prev,
+        [deviceId]: {
+          ...prev[deviceId],
+          angle: angle
+        }
+      }));
+
+      // Send to server
+      wsRef.current.send(JSON.stringify({
+        type: 'setAngle',
+        deviceId,
+        angle
+      }));
+    } else {
+      console.warn('Angle out of range for device:', deviceId);
+    }
+  };
+
+  const handleUnassignDevice = (deviceId) => {
+    setVents(prev => prev.filter(vent => vent.deviceId !== deviceId));
+    
+    setDevices(prev => ({
+      ...prev,
+      [deviceId]: {
+        ...prev[deviceId],
+        assigned: false
+      }
     }));
+  };
+
+  const handlePlaceDevice = (deviceId) => {
+    setPlacingDevice(deviceId);
   };
 
   return (
@@ -77,15 +175,16 @@ function App() {
       </nav>
 
       <main className="max-w-7xl mx-auto px-4 py-6">
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <div className="flex flex-wrap gap-4 items-center mb-6">
-            <div className="flex-1">
+        <div className="grid grid-cols-3 gap-6">
+          {/* Floor Plan Section */}
+          <div className="col-span-2 bg-white rounded-lg shadow-md p-6">
+            <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Upload Floor Plan
               </label>
               <input
                 type="file"
-                accept=".svg"
+                accept="image/*"
                 onChange={handleFloorPlanUpload}
                 className="block w-full text-sm text-gray-500
                   file:mr-4 file:py-2 file:px-4
@@ -94,25 +193,13 @@ function App() {
                   file:bg-primary file:text-white
                   hover:file:bg-blue-600"
               />
+              {placingDevice && (
+                <div className="mt-2 p-2 bg-yellow-100 text-yellow-800 rounded">
+                  Click on the map to place the selected vent
+                </div>
+              )}
             </div>
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Select Device
-              </label>
-              <select
-                id="deviceSelect"
-                className="block w-full rounded-md border-gray-300 shadow-sm
-                  focus:border-primary focus:ring-primary
-                  sm:text-sm p-2 border"
-              >
-                {Object.keys(devices).map(deviceId => (
-                  <option key={deviceId} value={deviceId}>{deviceId}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="bg-gray-50 rounded-lg border border-gray-200">
+            
             <Stage width={800} height={600} onClick={handleStageClick}>
               <Layer>
                 {floorPlan && (
@@ -122,41 +209,62 @@ function App() {
                     height={600}
                   />
                 )}
-                {vents.map((vent, i) => (
-                  <Circle
-                    key={i}
-                    x={vent.x}
-                    y={vent.y}
-                    radius={10}
-                    fill={devices[vent.deviceId]?.angle > 0 ? "#22c55e" : "#ef4444"}
-                    onClick={() => {
-                      const newAngle = devices[vent.deviceId]?.angle > 0 ? 0 : 90;
-                      setVentAngle(vent.deviceId, newAngle);
-                    }}
-                  />
-                ))}
+                {vents.map((vent, i) => {
+                  const device = devices[vent.deviceId];
+                  return (
+                    <VentMarker
+                      key={i}
+                      x={vent.x}
+                      y={vent.y}
+                      device={device}
+                      onClick={() => handleVentClick(device)}
+                    />
+                  );
+                })}
               </Layer>
             </Stage>
           </div>
-        </div>
 
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-xl font-semibold text-gray-800 mb-4">Connected Devices</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {Object.entries(devices).map(([deviceId, device]) => (
-              <div key={deviceId} className="p-4 border rounded-lg">
-                <p className="font-medium text-gray-700">Device ID: {deviceId}</p>
-                <p className="text-gray-600">Angle: {device.angle}°</p>
-                <div className={`mt-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                  device.angle > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                }`}>
-                  {device.angle > 0 ? 'Open' : 'Closed'}
-                </div>
-              </div>
-            ))}
+          {/* Connected Devices */}
+          <div className="bg-white rounded-lg shadow-md p-6 overflow-auto max-h-[800px]">
+            <h2 className="text-xl font-semibold mb-4">Connected Devices</h2>
+            <DeviceList
+              devices={devices}
+              onAngleChange={setVentAngle}
+              onConfigureDevice={handleConfigureDevice}
+              onUnassignDevice={handleUnassignDevice}
+              onPlaceDevice={handlePlaceDevice}
+            />
           </div>
         </div>
       </main>
+
+      {/* Modals */}
+      {showDeviceConfig && (
+        <DeviceConfig
+          device={selectedDevice}
+          onClose={() => {
+            setShowDeviceConfig(false);
+            setSelectedDevice(null);
+          }}
+          onSave={handleDeviceConfig}
+        />
+      )}
+      
+      {selectedDevice && (
+        <div className="fixed bottom-4 right-4 bg-white rounded-lg shadow-lg p-4 w-72">
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="font-medium">{selectedDevice.alias || selectedDevice.deviceId}</h3>
+            <button
+              onClick={() => setSelectedDevice(null)}
+              className="text-gray-500 hover:text-gray-700"
+            >
+              ×
+            </button>
+          </div>
+          <VentControl device={selectedDevice} onAngleChange={setVentAngle} />
+        </div>
+      )}
     </div>
   );
 }
