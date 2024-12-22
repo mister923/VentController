@@ -1,7 +1,7 @@
 VentController
 =============
 
-A ventilation control system application for controlling smart air vents.
+A vent control system application for controlling DIY IOT air vents.
 
 Project Structure:
 ----------------
@@ -107,7 +107,3 @@ Contributing:
 3. Commit your changes (git commit -m 'Add some AmazingFeature')
 4. Push to the branch (git push origin feature/AmazingFeature)
 5. Open a Pull Request
-
-License:
--------
-[Add your license information]
