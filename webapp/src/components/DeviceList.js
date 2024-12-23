@@ -1,8 +1,15 @@
 import React from 'react';
 import VentControl from './VentControl';
+import SensorDisplay from './SensorDisplay';
 
 function DeviceList({ devices, onAngleChange, onConfigureDevice, onUnassignDevice, onPlaceDevice }) {
-  const { assigned, unassigned } = Object.entries(devices).reduce(
+  // Combine vents and sensors from the devices object
+  const allDevices = {
+    ...devices.vents,
+    ...devices.sensors
+  };
+
+  const { assigned, unassigned } = Object.entries(allDevices).reduce(
     (acc, [id, device]) => {
       if (device.assigned) {
         acc.assigned.push(device);
@@ -19,7 +26,10 @@ function DeviceList({ devices, onAngleChange, onConfigureDevice, onUnassignDevic
       <div className="flex justify-between items-start mb-2">
         <div>
           <p className="text-sm text-gray-500 font-mono">{device.deviceId}</p>
-          <p className="font-medium">{device.alias || 'Unnamed Device'}</p>
+          <p className="font-medium">
+            {device.alias || `Unnamed ${device.deviceType === 'vent' ? 'Vent' : 'Sensor'}`}
+          </p>
+          <p className="text-sm text-gray-500">{device.deviceType}</p>
         </div>
         <div className="flex gap-2">
           {!device.assigned && (
@@ -53,7 +63,11 @@ function DeviceList({ devices, onAngleChange, onConfigureDevice, onUnassignDevic
           </button>
         </div>
       </div>
-      <VentControl device={device} onAngleChange={onAngleChange} />
+      {device.deviceType === 'vent' ? (
+        <VentControl device={device} onAngleChange={onAngleChange} />
+      ) : (
+        <SensorDisplay device={device} />
+      )}
     </div>
   );
 

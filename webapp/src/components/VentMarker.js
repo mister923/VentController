@@ -1,52 +1,48 @@
 import React from 'react';
 import { Group, Rect, Text } from 'react-konva';
 
-function VentMarker({ x, y, device, onClick }) {
-  const width = 80;
-  const height = 60;
+function VentMarker({ x, y, device, scale = { x: 1, y: 1 }, onClick }) {
+  const width = 80 * scale.x;
+  const height = 60 * scale.y;
   
   return (
     <Group 
       x={x - width/2} 
-      y={y - height/2} 
+      y={y - height/2}
       onClick={onClick}
     >
-      {/* Background rectangle */}
       <Rect
         width={width}
         height={height}
         fill={device.color || '#3b82f6'}
         opacity={0.2}
-        cornerRadius={5}
+        cornerRadius={5 * scale.x}
       />
-      {/* Foreground rectangle */}
       <Rect
-        x={5}
-        y={5}
-        width={width - 10}
-        height={height - 10}
+        x={5 * scale.x}
+        y={5 * scale.y}
+        width={width - 10 * scale.x}
+        height={height - 10 * scale.y}
         fill={device.color || '#3b82f6'}
         opacity={0.8}
-        cornerRadius={3}
+        cornerRadius={3 * scale.x}
       />
-      {/* Device name */}
       <Text
         text={device.alias || 'Vent'}
-        fontSize={12}
+        fontSize={12 * scale.x}
         fill="white"
         align="center"
         width={width}
-        y={12}
+        y={12 * scale.y}
       />
-      {/* Angle display */}
       <Text
         text={`${device.angle || 0}°`}
-        fontSize={14}
+        fontSize={14 * scale.x}
         fontStyle="bold"
         fill="white"
         align="center"
         width={width}
-        y={height - 25}
+        y={height - 25 * scale.y}
       />
     </Group>
   );
