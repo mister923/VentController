@@ -8,9 +8,10 @@
 #include <ArduinoOTA.h>
 
 // Configuration
-const char* ssid = "YOUR_WIFI_SSID";
-const char* password = "YOUR_WIFI_PASSWORD";
-const char* websocket_server = "192.168.1.100";
+const char* ssid = "ORBI53";
+const char* password = "Jeppesen531";
+//http://192.168.1.24:8081/
+const char* websocket_server = "192.168.1.24";
 const int websocket_port = 8081;
 const int SERVO_PIN = 13;
 const char* OTA_HOSTNAME = "VentController";  // OTA hostname
@@ -29,6 +30,7 @@ String deviceId;
 int currentAngle = 0;
 unsigned long lastConnectionAttempt = 0;
 bool isConnected = false;
+unsigned int pongCounter = 0;
 
 // Function declarations
 void setupOTA();
@@ -36,6 +38,7 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length);
 void sendDeviceInfo();
 void handleCommand(uint8_t * payload, size_t length);
 void ensureConnection();
+void logDeviceStatus();
 
 void setup() {
     Serial.begin(115200);
@@ -45,6 +48,7 @@ void setup() {
     ventServo.setPeriodHertz(50);
     ventServo.attach(SERVO_PIN);
     ventServo.write(currentAngle);
+    Serial.printf("Initial angle set to: %d\n", currentAngle);
     
     // Connect to WiFi
     WiFi.mode(WIFI_STA);
@@ -113,7 +117,6 @@ void setupOTA() {
         ventServo.attach(SERVO_PIN);
         ventServo.write(currentAngle);
     });
-    
     ArduinoOTA.begin();
     Serial.println("OTA ready");
 }
@@ -158,6 +161,8 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
             break;
             
         case WStype_TEXT:
+            Serial.println("WebSocket Text received:");
+            Serial.println((char*)payload);
             handleCommand(payload, length);
             break;
             
@@ -171,7 +176,11 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
             break;
             
         case WStype_PONG:
-            Serial.println("Pong received");
+            pongCounter++;
+            Serial.printf("Pong received (#%u)\n", pongCounter);
+            if (pongCounter % 15 == 0) {
+                logDeviceStatus();
+            }
             break;
             
         default:
@@ -198,6 +207,7 @@ void sendDeviceInfo() {
 }
 
 void handleCommand(uint8_t * payload, size_t length) {
+    Serial.println("Parsing command...");
     StaticJsonDocument<200> doc;
     DeserializationError error = deserializeJson(doc, payload, length);
     
@@ -207,11 +217,16 @@ void handleCommand(uint8_t * payload, size_t length) {
     }
     
     const char* type = doc["type"];
-    Serial.printf("Received command: %s\n", type);
+    Serial.printf("Command type: %s\n", type);
     
-    if (strcmp(type, "setAngle") == 0) {
+    if (strcmp(type, "angleSet") == 0) {
         int angle = doc["angle"];
+        Serial.printf("Received command: %s {angle: %d}\n", type, angle);
+        
         if (angle >= MIN_ANGLE && angle <= MAX_ANGLE) {
+            Serial.printf("Changing angle from %d to %d\n", currentAngle, angle);
+            int pulseWidth = map(angle, 0, 180, 500, 2400);  // Calculate approximate pulse width
+            Serial.printf("Approximate pulse width: %d microseconds\n", pulseWidth);
             currentAngle = angle;
             ventServo.write(angle);
             
@@ -226,8 +241,19 @@ void handleCommand(uint8_t * payload, size_t length) {
             webSocket.sendTXT(output);
             Serial.printf("Angle set to: %d\n", angle);
         } else {
-            Serial.printf("Angle %d out of range (%d-%d)\n", 
+            Serial.printf("Requested angle %d out of range (%d-%d)\n", 
                 angle, MIN_ANGLE, MAX_ANGLE);
         }
     }
+}
+
+void logDeviceStatus() {
+    Serial.println("\n=== Device Status ===");
+    Serial.printf("Device ID: %s\n", deviceId.c_str());
+    Serial.printf("Device Type: vent\n");
+    Serial.printf("WiFi SSID: %s\n", WiFi.SSID().c_str());
+    Serial.printf("IP Address: %s\n", WiFi.localIP().toString().c_str());
+    Serial.printf("Current Angle: %d\n", currentAngle);
+    Serial.printf("WebSocket Connected: %s\n", isConnected ? "Yes" : "No");
+    Serial.println("==================\n");
 } 

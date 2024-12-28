@@ -1,0 +1,4 @@
+madhephaestus/ESP32Servo @ ^1.1.1
+links2004/WebSockets @ ^2.4.1
+bblanchon/ArduinoJson @ ^6.21.3
+ArduinoOTA
