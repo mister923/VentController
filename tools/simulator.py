@@ -80,7 +80,7 @@ class SensorDevice(BaseDevice):
         try:
             while True:
                 await asyncio.sleep(5)  # Send temperature update every 5 seconds
-                self.current_temp += random.uniform(-0.5, 0.5)  # Simulate temperature changes
+                self.current_temp += random.uniform(-2, 2)  # Simulate temperature changes
                 message = {
                     "type": "tempUpdate",
                     "deviceId": self.device_id,

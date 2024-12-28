@@ -1,12 +1,13 @@
 import React from 'react';
 
 function SensorDisplay({ device }) {
+  const temperature = device?.temperature ?? 0;
+  
   return (
     <div className="mt-2">
-      <div className="flex items-center justify-between">
-        <span className="text-sm text-gray-600">Temperature</span>
-        <span className="text-lg font-medium">{device.temperature.toFixed(1)}°C</span>
-      </div>
+      <p className="text-lg font-medium">
+        Temperature: {temperature.toFixed(1)}°C
+      </p>
     </div>
   );
 }
