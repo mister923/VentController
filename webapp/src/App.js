@@ -7,6 +7,9 @@ import Login from './components/Login';
 import { useAuth } from './contexts/AuthContext';
 import HouseManager from './components/HouseManager';
 
+console.log('Server Host:', process.env.REACT_APP_SERVER_HOST);
+console.log('Server Port:', process.env.REACT_APP_SERVER_PORT);
+
 function App() {
   // All hooks must be called before any conditional returns
   const { user, loading, logout } = useAuth();
@@ -26,7 +29,7 @@ function App() {
   useEffect(() => {
     if (!user) return;
 
-    wsRef.current = new WebSocket('ws://localhost:8081');
+    wsRef.current = new WebSocket(`ws://${process.env.REACT_APP_SERVER_HOST}:${process.env.REACT_APP_SERVER_PORT}`);
 
     wsRef.current.onmessage = (event) => {
       const data = JSON.parse(event.data);

@@ -5,15 +5,35 @@ const bcrypt = require('bcrypt');
 const cors = require('cors');
 const WebSocket = require('ws');
 const http = require('http');
+const util = require('util');
 
 const app = express();
 const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
+const wss = new WebSocket.Server({ 
+    server,
+    verifyClient: (info) => {
+        console.log('New WebSocket connection attempt from:', info.origin);
+        return true;  // Allow all connections, add validation if needed
+    }
+});
 const db = new sqlite3.Database('./database.sqlite');
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
+const corsOptions = {
+    origin: '*',  // Be more specific in production
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true
+};
+
 app.use(express.json());
-app.use(cors());
+app.use(cors(corsOptions));
+
+// Add a simple logging function
+const logAuth = (type, details) => {
+    const timestamp = new Date().toISOString();
+    console.log(`[${timestamp}] AUTH ${type}: ${util.inspect(details, {depth: null})}`);
+};
 
 // Database initialization
 db.serialize(() => {
@@ -62,12 +82,15 @@ const authenticateToken = (req, res, next) => {
 // Auth routes
 app.post('/api/register', async (req, res) => {
   const { username, password } = req.body;
+  logAuth('REGISTER_ATTEMPT', { username, ip: req.ip });
 
   if (!username || !password) {
+    logAuth('REGISTER_FAILED', { username, reason: 'Missing credentials', ip: req.ip });
     return res.status(400).json({ error: 'Username and password are required' });
   }
 
   if (password.length < 8) {
+    logAuth('REGISTER_FAILED', { username, reason: 'Password too short', ip: req.ip });
     return res.status(400).json({ error: 'Password must be at least 8 characters' });
   }
 
@@ -90,8 +113,10 @@ app.post('/api/register', async (req, res) => {
       );
     });
 
+    logAuth('REGISTER_SUCCESS', { username, ip: req.ip });
     res.status(201).json({ message: 'User created successfully' });
   } catch (err) {
+    logAuth('REGISTER_FAILED', { username, reason: err.message, ip: req.ip });
     if (err.message === 'Username already exists') {
       res.status(400).json({ error: err.message });
     } else {
@@ -103,8 +128,10 @@ app.post('/api/register', async (req, res) => {
 
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
+  logAuth('LOGIN_ATTEMPT', { username, ip: req.ip });
 
   if (!username || !password) {
+    logAuth('LOGIN_FAILED', { username, reason: 'Missing credentials', ip: req.ip });
     return res.status(400).json({ error: 'Username and password are required' });
   }
 
@@ -117,11 +144,13 @@ app.post('/api/login', async (req, res) => {
     });
 
     if (!user) {
+      logAuth('LOGIN_FAILED', { username, reason: 'User not found', ip: req.ip });
       return res.status(401).json({ error: 'Invalid username or password' });
     }
 
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) {
+      logAuth('LOGIN_FAILED', { username, reason: 'Invalid password', ip: req.ip });
       return res.status(401).json({ error: 'Invalid username or password' });
     }
 
@@ -131,6 +160,7 @@ app.post('/api/login', async (req, res) => {
       { expiresIn: '7d' }
     );
 
+    logAuth('LOGIN_SUCCESS', { username, userId: user.id, ip: req.ip });
     res.json({ 
       token,
       user: {
@@ -139,6 +169,7 @@ app.post('/api/login', async (req, res) => {
       }
     });
   } catch (err) {
+    logAuth('LOGIN_ERROR', { username, error: err.message, ip: req.ip });
     console.error('Login error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
